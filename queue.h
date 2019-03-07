@@ -66,9 +66,17 @@ void queue_push(struct int_queue queue[static 1], int value)
 
     queue->values[queue->front_index] = value;
     
-    queue->front_index = (queue->front_index + 1) % queue->current_size;
-    if (queue->front_index == queue->back_index)
+    int new_front_index = (queue->front_index + 1) % queue->current_size;
+    
+    /* new_front_index is the next place front_index will point to. If
+     * that is the same as back_index, then we know we have run out of space
+     * in our values array. Therefore, we will now resize the array. Resizing
+     * takes care of incrementing front_index, so we do not need to increment
+     * as usual in this case. */
+    if (new_front_index == queue->back_index)
         resize(queue, queue->current_size * GROWTH_RATE);
+    else
+        queue->front_index = new_front_index;
     
     pthread_cond_signal(&queue->ready);
     pthread_mutex_unlock(&queue->mutex);
@@ -96,7 +104,41 @@ inline int is_empty(struct int_queue queue[static 1])
     return queue->front_index == queue->back_index;
 }
 
+
+/* Resizes queue->values to contain new_size integer elements. This
+ * function assumes that the calling thread has acquired queue->mutex.
+ * If this is not the case, the behaviour of this function is undefined.
+ *
+ * This function also assumes that the number of elements currently
+ * contained within the queue is less than or equal to new_size.
+ * If this is not the case, this function will not transfer all queue
+ * elements.
+ * */
 void resize(struct int_queue queue[static 1], size_t new_size)
 {
+    /* This will cause problems if we try to use new_size as a modulus.
+     * Also, it does not make sense to have new_size less than 1. */
+    if (new_size < 1) return;
+
+    int idx;
+    int new_front_index = 0;
+
+    int *new_values = (int *) calloc(new_size, sizeof(int));
+    
+    for (idx = queue->back_index; idx != queue->front_index;
+            idx = (idx + 1) % new_size)
+    {
+        new_values[new_front_index] = queue->values[idx];
+        new_front_index += 1;
+
+        /* Make sure no segfaults occur. */
+        if (new_front_index == new_size) break;
+    }
+    new_values[new_front_index++] = queue->values[queue->front_index];
+
+    queue->values = new_values;
+    queue->back_index = 0;
+    queue->front_index = new_front_index % new_size;
+    queue->current_size = new_size;
 }
 

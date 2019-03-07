@@ -10,15 +10,56 @@
 } while(0);
 
 void int_queue_tests_without_resizing(void);
+void int_queue_tests_with_resizing(void);
 void *queue_pop_thread(void *);
 
 int main()
 {
     int_queue_tests_without_resizing();
+    int_queue_tests_with_resizing();
+}
+
+void int_queue_tests_with_resizing()
+{
+    printf("\n\n TESTING QUEUE WITH RESIZING \n\n");
+    struct int_queue queue;
+    init_queue(&queue);
+
+    pthread_t t1, t2, t3;
+
+    printf("Now we are adding current_size + 3 elements into the queue, so the queue will have to resize.\n");
+    int i;
+    int n = queue.current_size;
+    for (i = 0; i < n + 3; i++)
+    {
+        queue_push(&queue, i);
+    }
+
+    printf("We are now popping current_size elements off the queue. They should be in order from 0 to 9.\n");
+    for (i = 0; i < n; i++)
+    {
+        printf("Popping: %i\n", queue_pop(&queue));
+    }
+
+    printf("Now let's let the threads pop off the last three elements\n");
+
+    pthread_create(&t1, NULL, (void *) queue_pop_thread, (void *) &queue);
+    pthread_create(&t2, NULL, (void *) queue_pop_thread, (void *) &queue);
+    pthread_create(&t3, NULL, (void *) queue_pop_thread, (void *) &queue);
+
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+    pthread_join(t3, NULL);
+
+    printf("The queue should now be empty.\n");
+    ASSERT(is_empty(&queue), "the queue isn't empty\n");
+
 }
 
 void int_queue_tests_without_resizing()
 {
+   printf("\n\n TESTING QUEUE WITHOUT RESIZING \n\n");
+   
    struct int_queue queue;
    init_queue(&queue);
 
