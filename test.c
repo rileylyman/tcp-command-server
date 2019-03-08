@@ -57,14 +57,14 @@ void *thread_inc_counter(void *counter_)
 {
     struct atomic_counter *counter = (struct atomic_counter *)counter_;
     inc_counter(counter);
-    printf("Counter is now %i\n", val_counter(counter));
+    printf("Counter is now %zu\n", val_counter(counter));
 }
 
 void *thread_dec_counter(void *counter_)
 {
     struct atomic_counter *counter = (struct atomic_counter *)counter_;
     dec_counter(counter);
-    printf("Counter is now %i\n", val_counter(counter));
+    printf("Counter is now %zu\n", val_counter(counter));
 }
 
 void int_queue_tests_with_resizing()

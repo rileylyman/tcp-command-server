@@ -20,12 +20,15 @@ struct int_queue
     pthread_cond_t  ready;
 };
 
-void init_queue(struct int_queue _[static 1]);
+/* Function prototypes. Note: I use [static 1] to denote
+ * a pointer that is not NULL.
+ * */
+void init_queue   (struct int_queue _[static 1]);
 void destroy_queue(struct int_queue _[static 1]);
-void queue_push(struct int_queue _[static 1], int);
-int queue_pop(struct int_queue _[static 1]);
-void resize(struct int_queue _[static 1], size_t);
-int is_empty(struct int_queue _[static 1]);
+void queue_push   (struct int_queue _[static 1], int);
+int queue_pop     (struct int_queue _[static 1]);
+void resize       (struct int_queue _[static 1], size_t);
+int is_empty      (struct int_queue _[static 1]);
 
 /* Initializes the given queue. This function must be
  * called before use of the queue.
@@ -105,7 +108,6 @@ inline int is_empty(struct int_queue queue[static 1])
 {
     return queue->front_index == queue->back_index;
 }
-
 
 /* Resizes queue->values to contain new_size integer elements. This
  * function assumes that the calling thread has acquired queue->mutex.

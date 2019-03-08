@@ -13,24 +13,25 @@
 #define THREAD_POOL_SIZE 4
 #define READ_BUFFER_SIZE 1024
 
-static struct int_queue clients_waiting;
-static struct atomic_counter num_clients;
-static int server_id;
+static struct int_queue clients_waiting;  /* A queue of all clients waiting to be served. */
+static struct atomic_counter num_clients; /* The number of clients connected to the server. */
+static int server_id; /* This server's ID. */
 
-static int port;
+static int port; /* This server's port. */
 
-typedef void command_handler(int);
+typedef void command_handler(int); /* A function that handles one of the ASCII commands. */
 
+/* Function prototypes: */
 void initialize_thread_pool(struct int_queue *, size_t);
 void serve(void);
 void *thread_pool_worker(void *);
 void handle_connection(int);
 command_handler *parse_command(char *, size_t);
-
 void handle_who(int);
 void handle_where(int);
 void handle_why(int);
 void handle_command_not_found(int);
+/* End function prototypes. */
 
 int main(int argc, char **argv)
 {
@@ -44,6 +45,10 @@ int main(int argc, char **argv)
     serve();
 }
 
+/* Sets up the server socket and begins to accept connections.
+ * Every time a new connection is opened, it adds to to the 
+ * queue of waiting connections to be served by the thread pool.
+ * */
 void serve()
 {
     int sockfd = socket(PF_INET, SOCK_STREAM, 0);
@@ -75,6 +80,8 @@ void serve()
     close(sockfd);
 }
 
+/* Below are the function handlers for each command. 
+ * */
 void handle_who(int conn_fd)
 {
     char msg[20]; /*size_t should not be more than 20 digits in decimal.*/
@@ -118,6 +125,10 @@ command_handler *parse_command(char *buffer, size_t len)
         return handle_command_not_found;
 }
 
+/* Each thread calls this function when it pops a new connection
+ * of the waiting connections queue. It reads the command from the
+ * connection and then sends the appropriate response.
+ * */
 void handle_connection(int conn_fd)
 {
     size_t amt;
@@ -134,6 +145,10 @@ void handle_connection(int conn_fd)
     close(conn_fd);
 }
 
+/* Creates `size` threads and makes them all try to pop an element
+ * from the waiting connections queue. This will cause them all to 
+ * block until a new connection arrives.
+ * */
 void initialize_thread_pool(struct int_queue *queue, size_t size)
 {
     size_t i;
@@ -144,6 +159,10 @@ void initialize_thread_pool(struct int_queue *queue, size_t size)
     }
 }
 
+/* Attempts to pop a connection off the waiting connections queue. 
+ * Then, increment num_clients, handle the connectio, and then 
+ * decrement num_clients.
+ * */
 void *thread_pool_worker(void *queue_)
 {
     struct int_queue *queue = (struct int_queue *) queue_;
