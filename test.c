@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include "queue.h"
+#include "atomic_counter.h"
 
 #define ASSERT(x, msg) do { \
     if (!x) { \
@@ -11,12 +12,59 @@
 
 void int_queue_tests_without_resizing(void);
 void int_queue_tests_with_resizing(void);
+void atomic_counter_tests(void);
+void *thread_dec_counter(void *);
+void *thread_inc_counter(void *);
 void *queue_pop_thread(void *);
 
 int main()
 {
     int_queue_tests_without_resizing();
     int_queue_tests_with_resizing();
+    atomic_counter_tests();
+}
+
+void atomic_counter_tests()
+{
+    printf("\n\n TESTING ATOMIC COUNTER \n\n");
+    
+    struct atomic_counter counter;
+    counter_init(&counter);
+    pthread_t t1, t2, t3;
+    
+    pthread_create(&t1, NULL, (void *) thread_inc_counter, (void *) &counter);
+    pthread_create(&t2, NULL, (void *) thread_inc_counter, (void *) &counter);
+    pthread_create(&t3, NULL, (void *) thread_inc_counter, (void *) &counter);
+
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+    pthread_join(t3, NULL);
+
+    ASSERT (val_counter(&counter) == 3, "Counter value should be 3\n");
+
+    pthread_create(&t1, NULL, (void *) thread_dec_counter, (void *) &counter);
+    pthread_create(&t2, NULL, (void *) thread_dec_counter, (void *) &counter);
+    pthread_create(&t3, NULL, (void *) thread_dec_counter, (void *) &counter);
+    
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+    pthread_join(t3, NULL);
+
+    ASSERT (val_counter(&counter) == 0, "Counter value should be 0\n");
+}
+
+void *thread_inc_counter(void *counter_)
+{
+    struct atomic_counter *counter = (struct atomic_counter *)counter_;
+    inc_counter(counter);
+    printf("Counter is now %i\n", val_counter(counter));
+}
+
+void *thread_dec_counter(void *counter_)
+{
+    struct atomic_counter *counter = (struct atomic_counter *)counter_;
+    dec_counter(counter);
+    printf("Counter is now %i\n", val_counter(counter));
 }
 
 void int_queue_tests_with_resizing()

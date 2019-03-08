@@ -99,6 +99,8 @@ int queue_pop(struct int_queue queue[static 1])
     return ret;
 }
 
+/* Returns whether or not the current queue is empty. 
+ * */
 inline int is_empty(struct int_queue queue[static 1])
 {
     return queue->front_index == queue->back_index;
