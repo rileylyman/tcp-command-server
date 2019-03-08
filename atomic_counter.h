@@ -9,7 +9,7 @@ struct atomic_counter
 };
 
 /* Initialize the counter. */
-void counter_init(struct atomic_counter *counter)
+void init_counter(struct atomic_counter *counter)
 {
     counter->count = 0;
     pthread_mutex_init(&counter->lock, NULL);
@@ -32,7 +32,7 @@ void dec_counter(struct atomic_counter *counter)
 }
 
 /* Get the counter's current value. */
-int val_counter(struct atomic_counter *counter)
+size_t val_counter(struct atomic_counter *counter)
 {
     size_t ret;
     pthread_mutex_lock(&counter->lock);

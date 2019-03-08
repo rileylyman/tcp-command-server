@@ -29,7 +29,7 @@ void atomic_counter_tests()
     printf("\n\n TESTING ATOMIC COUNTER \n\n");
     
     struct atomic_counter counter;
-    counter_init(&counter);
+    init_counter(&counter);
     pthread_t t1, t2, t3;
     
     pthread_create(&t1, NULL, (void *) thread_inc_counter, (void *) &counter);
