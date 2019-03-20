@@ -5,9 +5,9 @@ CC=gcc -I. -pthread
 
 all:
 	$(CC) -g -O0 -o $(APP) $(SRC)
-
-test: 
 	$(CC) -g -o $(TEST) test.c
+
+test: all 
 	./test
 
 clean:

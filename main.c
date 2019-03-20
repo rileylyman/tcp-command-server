@@ -1,4 +1,6 @@
 #include <netinet/in.h>
+#include <errno.h>
+#include <netdb.h>
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <sys/socket.h>
@@ -12,12 +14,14 @@
 
 #define THREAD_POOL_SIZE 4
 #define READ_BUFFER_SIZE 1024
+#define BUFFER_LEN 2048
 
 static struct int_queue clients_waiting;  /* A queue of all clients waiting to be served. */
 static struct atomic_counter num_clients; /* The number of clients connected to the server. */
 static int server_id; /* This server's ID. */
 
-static int port; /* This server's port. */
+static int server_port = 8000; /* This server's port. */
+const char *localhost = "127.0.0.1";
 
 typedef void command_handler(int); /* A function that handles one of the ASCII commands. */
 
@@ -31,18 +35,80 @@ void handle_who(int);
 void handle_where(int);
 void handle_why(int);
 void handle_command_not_found(int);
+size_t read_command(int, char *, size_t);
+int is_eol(char);
+void client(void);
+void send_commands(int);
 /* End function prototypes. */
 
 int main(int argc, char **argv)
 {
-    server_id = 10;
-    
-    init_queue(&clients_waiting);
-    init_counter(&num_clients);
+    if (argc != 2)
+    {
+        printf("Usage: ./server [server, client]\n");
+        exit(1);
+    }
+    if (!strcmp(argv[1], "client"))
+    {
+        client();
+    }
+    else if (!strcmp(argv[1], "server"))
+    {
+        server_id = 10;
+        
+        init_queue(&clients_waiting);
+        init_counter(&num_clients);
 
-    initialize_thread_pool(&clients_waiting, THREAD_POOL_SIZE);
+        initialize_thread_pool(&clients_waiting, THREAD_POOL_SIZE);
 
-    serve();
+        serve();
+    }
+}
+
+/* Looks up the target IP address (in this case just localhost).
+ * It then connects and allows the user to send ASCII commands
+ * in a while loop.
+ * */
+void client()
+{
+    struct sockaddr_in target_address;
+    memset(&target_address, 0, sizeof(target_address));
+    target_address.sin_family = AF_INET;
+    target_address.sin_port = htons(server_port);
+    inet_aton("127.0.0.1", &target_address.sin_addr);
+
+    int sockfd = socket(PF_INET, SOCK_STREAM, 0);
+
+    int connection_status = connect(sockfd, 
+            (struct sockaddr*) &target_address, sizeof(target_address));
+
+    if (connection_status < 0)
+    {
+        printf("Could not connect\n");
+        exit(1);
+    }
+
+    send_commands(sockfd);
+}
+
+void send_commands(int connection_fd)
+{
+    size_t amt_sent;
+    char buffer[BUFFER_LEN] = {'\0'};
+    for (;;) 
+    {
+        printf("Enter Command: ");
+        fgets(buffer, BUFFER_LEN, stdin);
+        
+        if ((amt_sent = write(connection_fd, buffer, BUFFER_LEN)) == -1)
+            perror("Could not write to server.");
+        else
+            printf("Sent %ld bytes\n", amt_sent);
+        printf("Buffer: %s\n", buffer);
+        read(connection_fd, buffer, BUFFER_LEN);
+        printf("\nReceived %s\n", buffer);
+    } 
+    printf("Closing connection\n");
 }
 
 /* Sets up the server socket and begins to accept connections.
@@ -53,22 +119,23 @@ void serve()
 {
     int sockfd = socket(PF_INET, SOCK_STREAM, 0);
     struct sockaddr_in server_addr, client_addr;
-    size_t client_addr_len = sizeof(client_addr);
+    socklen_t client_addr_len = sizeof(client_addr);
 
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
+    server_addr.sin_port = htons(server_port);
 
     bind(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr));
     listen(sockfd, 1024);
 
     while (1)
     {
-        int client_fd = accept(sockfd, (struct sockaddr *) &client_addr, (socklen_t *) sizeof(client_addr));
+        int client_fd = accept(sockfd, (struct sockaddr *) &client_addr, &client_addr_len);
         if (client_fd < 0)
         {
-            printf("Error accepting connection.\n");
+            printf("Foo: %s\n", inet_ntoa(client_addr.sin_addr));
+            perror("Error accepting connection.");
             continue;
         }
         printf("Accepted connection from %s on port %d\n", 
@@ -126,23 +193,46 @@ command_handler *parse_command(char *buffer, size_t len)
 }
 
 /* Each thread calls this function when it pops a new connection
- * of the waiting connections queue. It reads the command from the
+ * off the waiting connections queue. It reads the command from the
  * connection and then sends the appropriate response.
  * */
 void handle_connection(int conn_fd)
 {
     size_t amt;
     char buffer[READ_BUFFER_SIZE] = {'\0'};
-    while ((amt = read(conn_fd, buffer, READ_BUFFER_SIZE) > 0))
+    char *curr_offset = buffer;
+    while ((amt = read(conn_fd, buffer, READ_BUFFER_SIZE)) > 0)
     {
-        printf("Received %zu bytes\n", amt);
-        buffer[amt] = '\0';
-        command_handler *handler = parse_command(buffer, amt);
-        handler(conn_fd);
-        printf("\nHandled connection\n");
+        curr_offset += amt - 1;
+        if (is_eol(*curr_offset))
+        {
+            *curr_offset = '\0';
+            curr_offset = buffer;
+            command_handler *handler = parse_command(buffer, amt);
+            handler(conn_fd);
+            printf("\nHandled connection\n");
+        }
     }
     printf("Closing connection\n");
     close(conn_fd);
+}
+
+int is_eol(char c)
+{
+    return c == '\0' || c == '\n' || c == '\r';
+}
+
+size_t read_command(int fd, char *buffer, size_t buffer_size)
+{
+    size_t total_read;
+    size_t amt;
+    while ((amt = read(fd, buffer, buffer_size) > 0))
+    {
+        total_read += amt;
+        buffer += amt;
+        buffer_size -= amt;
+    }
+    return total_read;
 }
 
 /* Creates `size` threads and makes them all try to pop an element
